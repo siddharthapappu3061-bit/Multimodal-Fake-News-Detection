@@ -6,6 +6,7 @@ import hashlib
 import pandas as pd
 import streamlit as st
 from PIL import Image
+from ui_theme import apply_theme, result_card
 
 from integration_support import MODEL_NAMES, DEFAULT_MODEL, bundle_paths, asset_signature, read_json, load_evaluation
 from gated_integration import SIX_MODEL_NAMES, gated_bundle_path, gated_signature, default_model
@@ -17,8 +18,11 @@ PROJECT = Path(__file__).resolve().parent
 
 def main():
     st.set_page_config(page_title="Multimodal News Analysis", page_icon="📰", layout="wide")
+    apply_theme()
     baseline, clip = bundle_paths(PROJECT)
-    st.title("Multimodal News Analysis")
+    st.markdown('<div class="eyebrow">MULTIMODAL / RESEARCH STUDIO</div>', unsafe_allow_html=True)
+    st.title("News, through two lenses.")
+    st.markdown('<div class="hero-copy">Explore how language and imagery shape a model’s prediction. One input, six perspectives.</div>', unsafe_allow_html=True)
     gated = gated_bundle_path(PROJECT)
     try:
         signature = gated_signature(baseline, clip, gated)
@@ -29,23 +33,40 @@ def main():
         st.info("The preserved five-model app is available with: streamlit run integrated_app.py")
         st.stop()
     st.caption("Academic Fakeddit prototype • Predictions reflect learned dataset patterns, not independent fact verification.")
-    page = st.sidebar.radio("Explore", ["Fake News Detection", "Model Comparison", "Dataset Analysis", "Model Architecture"])
+    st.sidebar.markdown("### News Analysis")
+    st.sidebar.caption("MULTIMODAL RESEARCH PROTOTYPE")
+    page = st.sidebar.radio("Workspace", ["Fake News Detection", "Model Comparison", "Dataset Analysis", "Model Architecture"], format_func=lambda x: {"Fake News Detection":"Analyze", "Model Comparison":"Performance", "Dataset Analysis":"Dataset", "Model Architecture":"Architecture"}[x])
+    st.sidebar.divider()
+    st.sidebar.caption("Six classifiers · Three frozen encoders\n\nEvaluated on Fakeddit. External generalization remains unestablished.")
 
     if page == "Fake News Detection":
         policy = load_policy(PROJECT / 'experiments/reliability_combined/policy.json', gated)
-        primary = st.selectbox("Classification model", list(SIX_MODEL_NAMES), index=list(SIX_MODEL_NAMES).index(primary_default),
-                               format_func=SIX_MODEL_NAMES.get, key="primary_model")
-        st.caption(f"Default: {SIX_MODEL_NAMES[primary_default]} • Selected using validation performance and local CPU verification. All six models remain available.")
-        title = st.text_area("News headline or social media post", key="headline")
-        uploaded = st.file_uploader("Accompanying image", type=["jpg", "jpeg", "png", "webp"])
-        compare = st.checkbox("Compare all six models", value=True)
-        selective = st.checkbox("Use selective classification for gated fusion", value=False,
-                                disabled=not policy['available'], key='selective_classification',
-                                help='Optional validation-checked policy. It changes only the displayed gated decision; all model probabilities remain unchanged.')
-        if policy['available']:
-            st.caption(f"Optional policy accepts when {policy_description(policy)}. Abstained inputs display Requires Verification. This trades coverage for accepted accuracy; it does not guarantee correctness.")
-        else:
-            st.caption("No compatible policy passed the validation checks. Informational warnings remain available.")
+        left, right = st.columns([1.35, 1], gap="large")
+        with left:
+            st.subheader("01 / The claim")
+            st.caption("Paste the headline or post exactly as you want it analyzed.")
+            title = st.text_area("News headline or social media post", key="headline", height=180,
+                                 placeholder="Enter a news headline or social media claim…")
+        with right:
+            st.subheader("02 / The image")
+            st.caption("Add the accompanying photograph or visual.")
+            uploaded = st.file_uploader("Accompanying image", type=["jpg", "jpeg", "png", "webp"])
+            if uploaded is not None:
+                try:
+                    with Image.open(BytesIO(uploaded.getvalue())) as preview:
+                        st.image(preview, width=280)
+                except Exception:
+                    st.caption("This file could not be previewed. Choose a valid image.")
+        with st.expander("Analysis settings"):
+            primary = st.selectbox("Classification model", list(SIX_MODEL_NAMES), index=list(SIX_MODEL_NAMES).index(primary_default),
+                                   format_func=SIX_MODEL_NAMES.get, key="primary_model")
+            st.caption(f"Default: {SIX_MODEL_NAMES[primary_default]}. Selected using validation performance and CPU verification.")
+            selective = False
+            if policy['available']:
+                selective = st.checkbox("Use selective classification for gated fusion", value=False, key="selective_classification")
+                st.caption(f"Acceptance rule: {policy_description(policy)}.")
+            else:
+                st.caption("Selective classification is unavailable: no compatible policy passed validation. Binary predictions and informational warnings remain active.")
         raw = uploaded.getvalue() if uploaded is not None else None
         input_key = hashlib.sha256(title.strip().encode() + (raw or b"")).hexdigest()
         if st.button("Analyze", type="primary"):
@@ -68,25 +89,20 @@ def main():
             scores = result["scores"]
             probabilities = scores[primary]
             label = ["Fake", "Real"][int(probabilities[1] > probabilities[0])]
-            st.subheader(SIX_MODEL_NAMES[primary])
             decision = displayed_decision(scores, policy, selective, primary)
-            st.metric("Decision", decision, f"{max(probabilities):.1%} model probability")
-            st.caption(f"Underlying model prediction: {label}. Model probability is not factual certainty.")
+            result_card(SIX_MODEL_NAMES[primary], decision, probabilities)
             if decision == 'Requires Verification':
-                st.info("The optional policy abstained. Review this input independently; the underlying Fake/Real prediction and probabilities have not changed.")
-            st.caption(f"Fake: {probabilities[0]:.2%} · Real: {probabilities[1]:.2%}")
-            if compare:
-                # Retain the original three-column baseline row; add the CLIP row below.
-                for kinds in (("text", "image", "fusion"), ("clip_image", "clip_fusion", "gated_fusion")):
-                    for column, kind in zip(st.columns(len(kinds)), kinds):
-                        p = scores[kind]
-                        column.metric(SIX_MODEL_NAMES[kind], ["Fake", "Real"][int(p[1] > p[0])], f"{max(p):.1%} model probability")
+                st.info("The optional policy abstained. Underlying scores are unchanged.")
+            if result["diagnostic"]["warning"]:
+                st.info(result["diagnostic"]["warning"])
+            with st.expander("Compare all six models"):
                 table = pd.DataFrame({SIX_MODEL_NAMES[k]: p for k, p in scores.items()}, index=["Fake", "Real"]).T
-                st.bar_chart(table)
-                st.dataframe(table.style.format("{:.2%}"))
+                st.caption("Each row is a separate classifier. Scores are not measures of comparative accuracy.")
+                st.bar_chart(table, horizontal=True, color=["#a8caff", "#526a8d"])
+                st.dataframe(table.style.format("{:.2%}"), use_container_width=True)
             diagnostic = result["diagnostic"]
-            with st.container(border=True):
-                st.subheader("Gated fusion reliability")
+            with st.expander("How the models responded"):
+                st.subheader("Agreement and disagreement")
                 reliability = assess(scores['text'][0], scores['clip_image'][0], scores['gated_fusion'][0])
                 st.write(f"Gated prediction: **{reliability['predicted_class']}** · model probability: **{reliability['model_probability']:.2%}**")
                 st.write(f"Text model: **{reliability['text_prediction']}** (Fake {scores['text'][0]:.2%}) · CLIP Vision: **{reliability['image_prediction']}** (Fake {scores['clip_image'][0]:.2%})")
@@ -104,9 +120,11 @@ def main():
                 image_column.metric("Image gate", f"{diagnostic['g_image']:.3f}")
                 st.bar_chart(pd.DataFrame({'Coefficient': [diagnostic['g_text'], diagnostic['g_image']]}, index=['Text','Image']))
                 st.caption("These learned coefficients sum to 1. They are not definitive feature-importance percentages or guarantees of which modality determined the prediction.")
-            st.image(result["image"], width=320)
+
         elif result:
             st.info("The input has changed. Click Analyze to update the predictions.")
+        else:
+            st.markdown('<div class="empty-state">Your analysis will appear here.<br>Add a claim and an image, then select Analyze.</div>', unsafe_allow_html=True)
 
     elif page == "Model Comparison":
         try:
@@ -150,7 +168,8 @@ def main():
                     path = baseline / "results" / f"{kind}.png"
                     if path.is_file():
                         st.image(str(path))
-            st.dataframe(pd.read_csv(clip / "results/test_predictions.csv", dtype={"id": str}).head(20))
+            with st.expander("Inspect saved test predictions"):
+                st.dataframe(pd.read_csv(clip / "results/test_predictions.csv", dtype={"id": str}).head(20))
         except (OSError, ValueError, KeyError) as exc:
             st.error(f"Could not read verified evaluation results: {exc}")
 
@@ -160,7 +179,8 @@ def main():
             report = read_json(report_path)
             st.dataframe(pd.DataFrame({s: {"samples": d["count"], "Fake": d["classes"].get("0", 0), "Real": d["classes"].get("1", 0)} for s, d in report["splits"].items()}).T)
             st.write("Existing clean_title and paired local images are used without resampling or relabeling.")
-            st.json(report)
+            with st.expander("Dataset validation details"):
+                st.json(report)
         data_root = PROJECT / "data"
         if (data_root / "test_processed.csv").is_file():
             from dataset import resolve_image
