@@ -1,0 +1,11 @@
+# Install CPU torch/torchvision separately on Windows; see README.
+torch>=2.6,<3
+torchvision>=0.21,<1
+transformers==4.57.1
+pandas>=2.2,<3
+numpy>=1.26,<3
+Pillow>=10,<13
+scikit-learn>=1.5,<2
+matplotlib>=3.8,<4
+streamlit>=1.40,<2
+safetensors>=0.4

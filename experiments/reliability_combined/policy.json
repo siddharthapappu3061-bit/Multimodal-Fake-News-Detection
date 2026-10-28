@@ -1,0 +1,14 @@
+{
+  "available": false,
+  "strategy": "confidence",
+  "threshold": 0.95,
+  "audit_passed": false,
+  "selection_split": "validate",
+  "run_id": "360136cca79fa370aa90",
+  "manifest_sha256": "1d67f56ecd7ee002bdd3498453d2757c4795b209519d45d05032403ae426642d",
+  "version": "combined-v2",
+  "audit_failures": [
+    "Coverage below 70%"
+  ],
+  "reason": "Selected policy did not pass validation checks; informational warnings only."
+}

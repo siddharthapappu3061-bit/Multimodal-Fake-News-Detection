@@ -1,0 +1,11 @@
+# Notebook settings are explicit in cell 3. Keep edits there for Colab runs.
+seed: 42
+epochs: 25
+batch_size: 64
+feature_batch_size: 32
+lr: 0.001
+weight_decay: 0.0001
+patience: 5
+labels:
+  0: Fake
+  1: Real

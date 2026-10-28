@@ -1,0 +1,11 @@
+# Use a separate environment for the experiment; do not upgrade the working app.
+# Windows: install a matching CPU torch/torchvision pair first (see CLIP_EXPERIMENT.md).
+torch>=2.6,<3
+transformers==4.57.1
+safetensors>=0.4
+Pillow>=10,<13
+numpy>=1.26,<3
+# Training/evaluation only; CPU inference does not need these two libraries.
+pandas>=2.2,<3
+scikit-learn>=1.5,<2
+matplotlib>=3.8,<4
